@@ -9,6 +9,9 @@ import (
 )
 
 func InstallChart(releaseName, namespace, chartTarFile string, getter genericclioptions.RESTClientGetter) error {
+	return InstallChartWithValues(releaseName, namespace, chartTarFile, getter, nil)
+}
+func InstallChartWithValues(releaseName, namespace, chartTarFile string, getter genericclioptions.RESTClientGetter, values map[string]interface{}) error {
 	chart, err := loader.Load(chartTarFile)
 	if err != nil {
 		return err
@@ -24,7 +27,7 @@ func InstallChart(releaseName, namespace, chartTarFile string, getter genericcli
 	hinstall := action.NewInstall(actionConfig)
 	hinstall.Namespace = namespace
 	hinstall.ReleaseName = releaseName
-	rel, err := hinstall.Run(chart, nil)
+	rel, err := hinstall.Run(chart, values)
 	if err != nil {
 		return err
 	}

@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"testing"
+	"time"
 )
 
 var (
@@ -19,6 +20,7 @@ var (
 	kubeConfigDefaultFilename = "~/.kube/config"
 	kubeConfig                string
 	cleanup                   bool
+	kopNoPrereqs              bool
 	kafkaClusterManifestDir   = "../../config/samples"
 )
 
@@ -34,7 +36,8 @@ var kClient kubeClient
 
 func init() {
 	flag.StringVar(&kubeConfig, "kubeconfig", "", "The kubeconfig to for the cluster to test")
-	flag.BoolVar(&cleanup, "cleanup", true, "cleanup install after test. default = true")
+	flag.BoolVar(&cleanup, "cleanup", false, "cleanup install after test.")
+	flag.BoolVar(&kopNoPrereqs, "noprereqs", false, "install koperator prerequisites")
 }
 
 func getKubeConfigFileName() string {
@@ -97,28 +100,35 @@ func TestMain(m *testing.M) {
 
 // Perform the koperator installation steps documented in the koperator installation guide
 // https://banzaicloud.com/docs/supertubes/kafka-operator/install-kafka-operator/#install-cert-manager
+// Prereqs:
+//   - kubeconfig for cluster in normal dir/env places or passed via `--kubeconfig` param
+//   - koperator CRDs loaded into the k8s cluster
+//   - this method in install_dependencies.go fails due to unable to turn off validation in the yaml apply API used
 func TestInstall(t *testing.T) {
 
-	installObj := install.NewInstall("charts", "manifests", kClient.KubeConfigFile)
-	if installObj == nil {
-		t.Fatalf("Failed to initialize installer")
-	}
-	// setup dependencies -- don't fail on error
-	status, err := installObj.InstallProfile(install.BasicDependenciesProfile, false)
-	if err != nil {
-		t.Logf("error returned for dependencies install: %v", err)
-	}
-	if status != nil {
-		for _, packageStatus := range status.PackageStatus {
-			statusStr := "success"
-			if packageStatus.Error != nil {
-				statusStr = fmt.Sprintf("error: %v", packageStatus.Error)
+	if !kopNoPrereqs {
+		installObj := install.NewInstall("charts", "manifests", kClient.KubeConfigFile)
+		if installObj == nil {
+			t.Fatalf("Failed to initialize installer")
+		}
+		// setup dependencies -- don't fail on error
+		status, err := installObj.InstallProfile(install.BasicDependenciesProfile, false)
+		if err != nil {
+			t.Logf("error returned for dependencies install: %v", err)
+		}
+		if status != nil {
+			for _, packageStatus := range status.PackageStatus {
+				statusStr := "success"
+				if packageStatus.Error != nil {
+					statusStr = fmt.Sprintf("error: %v", packageStatus.Error)
+				}
+				t.Logf("package: %s install status: %s", packageStatus.Name, statusStr)
 			}
-			t.Logf("package: %s install status: %s", packageStatus.Name, statusStr)
+		}
+		if cleanup {
+			defer InstallCleanup(t, installObj, status)
 		}
 	}
-	defer InstallCleanup(t, installObj, status)
-
 	kinstallObj := install.NewInstall("charts", kafkaClusterManifestDir, kClient.KubeConfigFile)
 	if kinstallObj == nil {
 		t.Fatalf("Failed to initialize installer")
@@ -139,36 +149,42 @@ func TestInstall(t *testing.T) {
 			t.Logf("package: %s install status: %s", packageStatus.Name, statusStr)
 		}
 	}
-	/*
-			installDepends := install.NewInstallDependencies("charts", "manifests", kClient.KubeConfigFile)
-			if cleanup {
-				defer InstallCleanup(t, installDepends)
-			}
-			t.Logf("Installing cert-manager")
-			if err := installDepends.InstallCertManager("cert-manager"); err != nil {
-				t.Errorf("Failed to install cert-manager: %v", err)
-			}
-			t.Logf("Installing zookeeper operator")
-			if err := installDepends.InstallZookeeperOperator("zookeeper"); err != nil {
-				t.Errorf("Failed to install zookeeper operator: %v", err)
-			}
-			t.Logf("Installing zookeeper cluster")
-			if err := kClient.ExtendedClient.ApplyYAMLFiles("zookeeper", zookeeperClusterManifestFile); err != nil {
-				t.Errorf("Failed to install zookeeper cluster: %v", err)
-			}
-			t.Logf("Installing prometheus operator")
-			if err := kClient.ExtendedClient.ApplyYAMLFiles("default", prometheusOperatorManifestFile); err != nil {
-				t.Errorf("Failed to install prometheus operator: %v", err)
-			}
+	if cleanup {
+		defer InstallCleanup(t, kinstallObj, kstatus)
+	}
+	time.Sleep(100 * time.Second)
+	// TODO:  Do stuff to check installation
 
-		t.Logf("Installing kafka operator")
-		if err := installDepends.InstallKafkaOperator("kafka"); err != nil {
-			t.Errorf("Failed to install kafka operator: %v", err)
+	/* OLD method
+		installDepends := install.NewInstallDependencies("charts", "manifests", kClient.KubeConfigFile)
+		if cleanup {
+			defer InstallCleanup(t, installDepends)
 		}
-		t.Logf("Installing kafka cluster")
-		if err := kClient.ExtendedClient.ApplyYAMLFiles("kafka", kafkaClusterManifestFile); err != nil {
-			t.Errorf("Failed to install kafkaCluster: %v", err)
+		t.Logf("Installing cert-manager")
+		if err := installDepends.InstallCertManager("cert-manager"); err != nil {
+			t.Errorf("Failed to install cert-manager: %v", err)
 		}
+		t.Logf("Installing zookeeper operator")
+		if err := installDepends.InstallZookeeperOperator("zookeeper"); err != nil {
+			t.Errorf("Failed to install zookeeper operator: %v", err)
+		}
+		t.Logf("Installing zookeeper cluster")
+		if err := kClient.ExtendedClient.ApplyYAMLFiles("zookeeper", zookeeperClusterManifestFile); err != nil {
+			t.Errorf("Failed to install zookeeper cluster: %v", err)
+		}
+		t.Logf("Installing prometheus operator")
+		if err := kClient.ExtendedClient.ApplyYAMLFiles("default", prometheusOperatorManifestFile); err != nil {
+			t.Errorf("Failed to install prometheus operator: %v", err)
+		}
+
+	t.Logf("Installing kafka operator")
+	if err := installDepends.InstallKafkaOperator("kafka"); err != nil {
+		t.Errorf("Failed to install kafka operator: %v", err)
+	}
+	t.Logf("Installing kafka cluster")
+	if err := kClient.ExtendedClient.ApplyYAMLFiles("kafka", kafkaClusterManifestFile); err != nil {
+		t.Errorf("Failed to install kafkaCluster: %v", err)
+	}
 
 	*/
 
@@ -186,15 +202,17 @@ func TestUninstall(t *testing.T) {
 		t.Logf("Failed to uninstall kafka profile: %v", err)
 	}
 
-	installObj := install.NewInstall("charts", "manifests", kClient.KubeConfigFile)
-	if installObj == nil {
-		t.Fatalf("Failed to initialize installer")
-	}
-	status := install.InstallStatus{
-		Profile: install.BasicDependenciesProfile,
-	}
-	if err := kinstallObj.Uninstall(&status); err != nil {
-		t.Logf("Failed to uninstall kafka profile: %v", err)
+	if !kopNoPrereqs {
+		installObj := install.NewInstall("charts", "manifests", kClient.KubeConfigFile)
+		if installObj == nil {
+			t.Fatalf("Failed to initialize installer")
+		}
+		status := install.InstallStatus{
+			Profile: install.BasicDependenciesProfile,
+		}
+		if err := kinstallObj.Uninstall(&status); err != nil {
+			t.Logf("Failed to uninstall kafka profile: %v", err)
+		}
 	}
 }
 

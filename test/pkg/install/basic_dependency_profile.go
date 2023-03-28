@@ -22,7 +22,9 @@ func (b BasicDependencies) Install(config InstallConfig, failOnError bool) ([]Pa
 		Namespace: "cert-manager",
 		Error:     nil,
 	}
-	if err := installDepends.InstallCertManager("cert-manager"); err != nil {
+	if err := installDepends.CreateNs("cert-manager"); err != nil {
+		certManagerStatus.Error = fmt.Errorf("failed to create kafka namespace: %v", err)
+	} else if err := installDepends.InstallCertManager("cert-manager"); err != nil {
 		certManagerStatus.Error = fmt.Errorf("failed to install cert-manager: %v", err)
 	}
 	status = append(status, certManagerStatus)
@@ -34,7 +36,9 @@ func (b BasicDependencies) Install(config InstallConfig, failOnError bool) ([]Pa
 		Namespace: "zookeeper",
 		Error:     nil,
 	}
-	if err := installDepends.InstallZookeeperOperator("zookeeper"); err != nil {
+	if err := installDepends.CreateNs("zookeeper"); err != nil {
+		zookeeperOpStatus.Error = fmt.Errorf("failed to create kafka namespace: %v", err)
+	} else if err := installDepends.InstallZookeeperOperator("zookeeper"); err != nil {
 		zookeeperOpStatus.Error = fmt.Errorf("failed to install zookeeper operator: %v", err)
 	}
 	status = append(status, zookeeperOpStatus)
