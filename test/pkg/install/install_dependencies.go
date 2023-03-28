@@ -20,6 +20,8 @@ var (
 	KoperatorCrdsDir               = "../../config/base/crds"
 	KoperatorCrdsManifest          = "manifests/kafka-operator-v0.22.0.crds.yaml"
 	KoperatorChartDir              = "../../charts/kafka-operator"
+	KoperatorImageRepo             = "tiswanso/kafka-operator"
+	KoperatorImageTag              = "openshift-support-1"
 	zookeeperClusterManifestFile   = "manifests/zookeeperCluster.yaml"
 	PrometheusOperatorChartTgz     = "kube-prometheus-stack-45.8.0.tgz"
 	prometheusOperatorManifestFile = "manifests/prometheus-operator-bundle.yaml"
@@ -185,8 +187,19 @@ func (id *InstallDependencies) InstallKafkaOperator(namespace string) error {
 		// return fmt.Errorf("Failed to install Koperator CRDs: %v", err)
 	}
 	getter := kube.GetConfig(id.KubeConfig, "", namespace)
-	return helm.InstallChart("koperator",
-		namespace, KoperatorChartDir, getter)
+
+	// use image built from changeset
+	vals := map[string]interface{}{
+		"operator": map[string]interface{}{
+			"image": map[string]interface{}{
+				"repository": KoperatorImageRepo,
+				"tag":        KoperatorImageTag,
+			},
+		},
+	}
+
+	return helm.InstallChartWithValues("koperator",
+		namespace, KoperatorChartDir, getter, vals)
 }
 func (id *InstallDependencies) UninstallKafkaOperator(namespace string) error {
 	//chartFile := filepath.Join(id.ChartDir, KoperatorChartDir)
