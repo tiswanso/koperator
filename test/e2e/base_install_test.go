@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	koperatorv1beta1 "github.com/banzaicloud/koperator/api/v1beta1"
 	"github.com/banzaicloud/koperator/test/pkg/install"
 	"io/ioutil"
 	"istio.io/istio/pkg/kube"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -30,6 +36,8 @@ type kubeClient struct {
 	Getter         genericclioptions.RESTClientGetter
 	Clientset      *kubernetes.Clientset
 	ExtendedClient kube.ExtendedClient
+	DynamicClient  dynamic.Interface
+	Scheme         *runtime.Scheme
 }
 
 var kClient kubeClient
@@ -73,6 +81,13 @@ func getClientCfgFromKubeconfigFile(kubeconfigPath string) (clientcmd.ClientConf
 	}
 	return clientcmd.NewClientConfigFromBytes(kconfContents)
 }
+func getDynamicClient(config *rest.Config) (dynamic.Interface, error) {
+	client, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic client: %v", err)
+	}
+	return client, nil
+}
 
 func TestMain(m *testing.M) {
 	var err error
@@ -95,6 +110,13 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		os.Exit(1)
 	}
+	kClient.DynamicClient, err = getDynamicClient(kClient.Config)
+	if err != nil {
+		os.Exit(1)
+	}
+	kClient.Scheme = runtime.NewScheme()
+	_ = koperatorv1beta1.AddToScheme(kClient.Scheme)
+
 	os.Exit(m.Run())
 }
 
@@ -152,9 +174,9 @@ func TestInstall(t *testing.T) {
 	if cleanup {
 		defer InstallCleanup(t, kinstallObj, kstatus)
 	}
-	time.Sleep(100 * time.Second)
-	// TODO:  Do stuff to check installation
 
+	// TODO:  Do stuff to check installation
+	CheckKafkaClusterStatus(t)
 	/* OLD method
 		installDepends := install.NewInstallDependencies("charts", "manifests", kClient.KubeConfigFile)
 		if cleanup {
@@ -216,9 +238,72 @@ func TestUninstall(t *testing.T) {
 	}
 }
 
+func TestGetKafkaCluster(t *testing.T) {
+	kcluster, err := GetKafkaCluster("kafka", "kafka")
+	if err != nil {
+		t.Errorf("failed to get cluster: %v", err)
+	}
+	t.Logf("Found cluster %s, status %v", kcluster.Name, kcluster.Status.State)
+
+	CheckKafkaClusterStatus(t)
+}
+
+func CheckKafkaClusterStatus(t *testing.T) {
+	var kcluster *koperatorv1beta1.KafkaCluster
+	var err error
+
+	for i := 0; i < 10; i++ {
+		if kcluster, err = GetKafkaCluster("kafka", "kafka"); err != nil {
+			t.Logf("failed to get cluster: %v", err)
+			if i < 9 {
+				t.Logf("retrying %d more times (%s wait)", 10-i, "10s")
+				time.Sleep(10 * time.Second)
+			}
+		} else {
+			if kcluster.Status.State == koperatorv1beta1.KafkaClusterRunning {
+				t.Logf("Found cluster %s, status %v", kcluster.Name, kcluster.Status.State)
+				break
+			}
+		}
+	}
+	if kcluster != nil {
+		t.Logf("Done: cluster %s, status %v", kcluster.Name, kcluster.Status.State)
+
+	} else {
+		t.Errorf("Failed to retrieve KafkaCluster")
+		return
+	}
+
+}
+
 func InstallCleanup(t *testing.T, installObj *install.Install, status *install.InstallStatus) {
 	t.Logf("Cleaning up installation for profile %d", status.Profile)
 	if err := installObj.Uninstall(status); err != nil {
 		t.Logf("Uninstall failed for profile %d: %v", status.Profile, err)
 	}
+}
+
+func GetKafkaCluster(name, namespace string) (*koperatorv1beta1.KafkaCluster, error) {
+	kClusterGVR := schema.GroupVersionResource{
+		Group:    koperatorv1beta1.GroupVersion.Group,
+		Version:  koperatorv1beta1.GroupVersion.Version,
+		Resource: "kafkaclusters",
+	}
+	resp, err := kClient.DynamicClient.Resource(kClusterGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		respList, err := kClient.DynamicClient.Resource(kClusterGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+		if err == nil {
+			for _, item := range respList.Items {
+				resp = &item
+			}
+		} else {
+			return nil, err
+		}
+	}
+	// Convert the unstructured object to cluster.
+	unstructured := resp.UnstructuredContent()
+	var kcluster koperatorv1beta1.KafkaCluster
+	err = runtime.DefaultUnstructuredConverter.
+		FromUnstructured(unstructured, &kcluster)
+	return &kcluster, err
 }

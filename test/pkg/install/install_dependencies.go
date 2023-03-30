@@ -21,7 +21,7 @@ var (
 	KoperatorCrdsManifest          = "manifests/kafka-operator-v0.22.0.crds.yaml"
 	KoperatorChartDir              = "../../charts/kafka-operator"
 	KoperatorImageRepo             = "tiswanso/kafka-operator"
-	KoperatorImageTag              = "openshift-support-1"
+	KoperatorImageTag              = "openshift-support-2"
 	zookeeperClusterManifestFile   = "manifests/zookeeperCluster.yaml"
 	PrometheusOperatorChartTgz     = "kube-prometheus-stack-45.8.0.tgz"
 	prometheusOperatorManifestFile = "manifests/prometheus-operator-bundle.yaml"
