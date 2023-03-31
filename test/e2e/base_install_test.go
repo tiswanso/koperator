@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"istio.io/istio/pkg/kube"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -177,38 +178,6 @@ func TestInstall(t *testing.T) {
 
 	// TODO:  Do stuff to check installation
 	CheckKafkaClusterStatus(t)
-	/* OLD method
-		installDepends := install.NewInstallDependencies("charts", "manifests", kClient.KubeConfigFile)
-		if cleanup {
-			defer InstallCleanup(t, installDepends)
-		}
-		t.Logf("Installing cert-manager")
-		if err := installDepends.InstallCertManager("cert-manager"); err != nil {
-			t.Errorf("Failed to install cert-manager: %v", err)
-		}
-		t.Logf("Installing zookeeper operator")
-		if err := installDepends.InstallZookeeperOperator("zookeeper"); err != nil {
-			t.Errorf("Failed to install zookeeper operator: %v", err)
-		}
-		t.Logf("Installing zookeeper cluster")
-		if err := kClient.ExtendedClient.ApplyYAMLFiles("zookeeper", zookeeperClusterManifestFile); err != nil {
-			t.Errorf("Failed to install zookeeper cluster: %v", err)
-		}
-		t.Logf("Installing prometheus operator")
-		if err := kClient.ExtendedClient.ApplyYAMLFiles("default", prometheusOperatorManifestFile); err != nil {
-			t.Errorf("Failed to install prometheus operator: %v", err)
-		}
-
-	t.Logf("Installing kafka operator")
-	if err := installDepends.InstallKafkaOperator("kafka"); err != nil {
-		t.Errorf("Failed to install kafka operator: %v", err)
-	}
-	t.Logf("Installing kafka cluster")
-	if err := kClient.ExtendedClient.ApplyYAMLFiles("kafka", kafkaClusterManifestFile); err != nil {
-		t.Errorf("Failed to install kafkaCluster: %v", err)
-	}
-
-	*/
 
 }
 
@@ -269,6 +238,7 @@ func CheckKafkaClusterStatus(t *testing.T) {
 	if kcluster != nil {
 		t.Logf("Done: cluster %s, status %v", kcluster.Name, kcluster.Status.State)
 
+		_ = CheckBrokers(t, kcluster)
 	} else {
 		t.Errorf("Failed to retrieve KafkaCluster")
 		return
@@ -306,4 +276,27 @@ func GetKafkaCluster(name, namespace string) (*koperatorv1beta1.KafkaCluster, er
 	err = runtime.DefaultUnstructuredConverter.
 		FromUnstructured(unstructured, &kcluster)
 	return &kcluster, err
+}
+
+func CheckBrokers(t *testing.T, kcluster *koperatorv1beta1.KafkaCluster) error {
+	if kcluster == nil {
+		return fmt.Errorf("no KafkaCluster to get brokers")
+	}
+	for _, broker := range kcluster.Spec.Brokers {
+		labelSelector := metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"app":      "kafka",
+				"brokerId": fmt.Sprintf("%d", broker.Id),
+			},
+		}
+		listOptions := metav1.ListOptions{
+			LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		}
+		pods, err := kClient.Clientset.CoreV1().Pods(kcluster.Namespace).List(context.TODO(), listOptions)
+		if err != nil {
+			return err
+		}
+		t.Logf("found pod for broker ID %d, pod %s", broker.Id, pods.Items[0].Name)
+	}
+	return nil
 }
