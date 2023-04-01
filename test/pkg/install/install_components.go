@@ -1,3 +1,17 @@
+// Copyright © 2023 Cisco Systems, Inc. and/or its affiliates
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package install
 
 import (
@@ -27,13 +41,13 @@ var (
 	prometheusOperatorManifestFile = "manifests/prometheus-operator-bundle.yaml"
 )
 
-type InstallDependencies struct {
+type InstallComponents struct {
 	InstallConfig
 	//Getter   genericclioptions.RESTClientGetter
 }
 
-func NewInstallDependencies(chartDir, manifestDir, kubeConfig string, extendedClient istio.ExtendedClient) *InstallDependencies {
-	return &InstallDependencies{
+func NewInstallComponents(chartDir, manifestDir, kubeConfig string, extendedClient istio.ExtendedClient) *InstallComponents {
+	return &InstallComponents{
 		InstallConfig{
 			ChartDir:       chartDir,
 			ManifestDir:    manifestDir,
@@ -43,13 +57,13 @@ func NewInstallDependencies(chartDir, manifestDir, kubeConfig string, extendedCl
 	}
 }
 
-func (id *InstallDependencies) InstallCertManagerCRDs() error {
+func (id *InstallComponents) InstallCertManagerCRDs() error {
 	if err := id.InstallConfig.extendedClient.ApplyYAMLFiles("", CertManagerCRDManifest); err != nil {
 		return fmt.Errorf("failed to install cert-manager CRDs: %v", err)
 	}
 	return nil
 }
-func (id *InstallDependencies) InstallCertManager(namespace string) error {
+func (id *InstallComponents) InstallCertManager(namespace string) error {
 	if err := id.InstallCertManagerCRDs(); err != nil {
 		return err
 	}
@@ -58,32 +72,32 @@ func (id *InstallDependencies) InstallCertManager(namespace string) error {
 	return helm.InstallChart("cert-manager",
 		namespace, chartFile, getter)
 }
-func (id *InstallDependencies) UninstallCertManager(namespace string) error {
+func (id *InstallComponents) UninstallCertManager(namespace string) error {
 	chartFile := filepath.Join(id.ChartDir, CertManagerChartTgz)
 	getter := kube.GetConfig(id.KubeConfig, "", namespace)
 	return helm.UninstallChart("cert-manager",
 		namespace, chartFile, getter)
 }
 
-func (id *InstallDependencies) InstallZookeeperOperator(namespace string) error {
+func (id *InstallComponents) InstallZookeeperOperator(namespace string) error {
 	chartFile := filepath.Join(id.ChartDir, ZookeeperOperatorChartTgz)
 	getter := kube.GetConfig(id.KubeConfig, "", namespace)
 	return helm.InstallChart("zookeeper",
 		namespace, chartFile, getter)
 }
-func (id *InstallDependencies) UninstallZookeeperOperator(namespace string) error {
+func (id *InstallComponents) UninstallZookeeperOperator(namespace string) error {
 	chartFile := filepath.Join(id.ChartDir, ZookeeperOperatorChartTgz)
 	getter := kube.GetConfig(id.KubeConfig, "", namespace)
 	return helm.UninstallChart("zookeeper",
 		namespace, chartFile, getter)
 }
-func (id *InstallDependencies) InstallZookeeperCluster(namespace string) error {
+func (id *InstallComponents) InstallZookeeperCluster(namespace string) error {
 	if err := id.InstallConfig.extendedClient.ApplyYAMLFiles("zookeeper", zookeeperClusterManifestFile); err != nil {
 		return fmt.Errorf("failed to install zookeeper cluster: %v", err)
 	}
 	return nil
 }
-func (id *InstallDependencies) UninstallZookeeperCluster(namespace string) error {
+func (id *InstallComponents) UninstallZookeeperCluster(namespace string) error {
 	if err := id.InstallConfig.extendedClient.DeleteYAMLFiles("zookeeper", zookeeperClusterManifestFile); err != nil {
 		return fmt.Errorf("failed to uninstall zookeeper cluster: %v", err)
 	}
@@ -96,8 +110,7 @@ func addEnableKVObjToMap(intfmap map[string]interface{}, key string, value bool)
 	}
 }
 
-// TODO: switch this to helm
-func (id *InstallDependencies) InstallPrometheusOperator(namespace string) error {
+func (id *InstallComponents) InstallPrometheusOperator(namespace string) error {
 	// Do the equivalent of
 	// helm install prometheus --namespace default prometheus-community/kube-prometheus-stack \
 	//--set prometheusOperator.createCustomResource=true \
@@ -147,7 +160,7 @@ func (id *InstallDependencies) InstallPrometheusOperator(namespace string) error
 
 	return nil
 }
-func (id *InstallDependencies) UninstallPrometheusOperator(namespace string) error {
+func (id *InstallComponents) UninstallPrometheusOperator(namespace string) error {
 	chartFile := filepath.Join(id.ChartDir, PrometheusOperatorChartTgz)
 	getter := kube.GetConfig(id.KubeConfig, "", namespace)
 	return helm.UninstallChart("prometheus",
@@ -155,40 +168,42 @@ func (id *InstallDependencies) UninstallPrometheusOperator(namespace string) err
 }
 
 // putting this here for now since it's the same routine
-func (id *InstallDependencies) InstallKafkaOperatorCRDs() error {
+func (id *InstallComponents) InstallKafkaOperatorCRDs() error {
 	// install CRDs
-	/*
-		entries, err := os.ReadDir(KoperatorCrdsDir)
-		if err != nil {
-			return err
-		}
-
-		var files []string
-		for _, e := range entries {
-			if !e.IsDir() {
-				files = append(files, filepath.Join(KoperatorCrdsDir, e.Name()))
-			}
-		}
-		if err := id.InstallConfig.extendedClient.ApplyYAMLFiles("", files...); err != nil {
-			return fmt.Errorf("failed to install kafka operator CRDs: %v", err)
-		}
-	*/
-	// This fails due to validation in k8s api because KafkaCluster CRD's annotation length is
+	// NOTE:
+	// Both methods fail due to validation in k8s api because KafkaCluster CRD's annotation length is
 	// too long.  The only way to apply the CRD is to disable validation which is buried in this extendedClient API
+	/*  // this method is using a dir of separate manifest files
+	entries, err := os.ReadDir(KoperatorCrdsDir)
+	if err != nil {
+		return err
+	}
+
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			files = append(files, filepath.Join(KoperatorCrdsDir, e.Name()))
+		}
+	}
+	if err := id.InstallConfig.extendedClient.ApplyYAMLFiles("", files...); err != nil {
+		return fmt.Errorf("failed to install kafka operator CRDs: %v", err)
+	}
+	*/
+	// this method is a single file with all the crd manifests
 	if err := id.InstallConfig.extendedClient.ApplyYAMLFiles("", KoperatorCrdsManifest); err != nil {
 		return fmt.Errorf("failed to install kafka operator CRDs: %v", err)
 	}
 	return nil
 }
 
-func (id *InstallDependencies) InstallKafkaOperator(namespace string) error {
+func (id *InstallComponents) InstallKafkaOperator(namespace string) error {
 	if err := id.InstallKafkaOperatorCRDs(); err != nil {
 		// continue with failure to allow for CRD install as prereq
 		// return fmt.Errorf("Failed to install Koperator CRDs: %v", err)
 	}
 	getter := kube.GetConfig(id.KubeConfig, "", namespace)
 
-	// use image built from changeset
+	// use image locallybuilt from changeset
 	vals := map[string]interface{}{
 		"operator": map[string]interface{}{
 			"image": map[string]interface{}{
@@ -201,26 +216,26 @@ func (id *InstallDependencies) InstallKafkaOperator(namespace string) error {
 	return helm.InstallChartWithValues("koperator",
 		namespace, KoperatorChartDir, getter, vals)
 }
-func (id *InstallDependencies) UninstallKafkaOperator(namespace string) error {
+func (id *InstallComponents) UninstallKafkaOperator(namespace string) error {
 	//chartFile := filepath.Join(id.ChartDir, KoperatorChartDir)
 	getter := kube.GetConfig(id.KubeConfig, "", namespace)
 	return helm.UninstallChart("koperator",
 		namespace, KoperatorChartDir, getter)
 }
-func (id *InstallDependencies) InstallKafkaCluster(namespace string, manifest string) error {
+func (id *InstallComponents) InstallKafkaCluster(namespace string, manifest string) error {
 	if err := id.InstallConfig.extendedClient.ApplyYAMLFiles(namespace, manifest); err != nil {
 		return fmt.Errorf("failed to install kafkaCluster: %v", err)
 	}
 	return nil
 }
-func (id *InstallDependencies) UninstallKafkaCluster(namespace string, manifest string) error {
+func (id *InstallComponents) UninstallKafkaCluster(namespace string, manifest string) error {
 	if err := id.InstallConfig.extendedClient.DeleteYAMLFiles(namespace, manifest); err != nil {
 		return fmt.Errorf("failed to uninstall KafkaCluster: %v", err)
 	}
 	return nil
 }
 
-func (id *InstallDependencies) CreateNs(namespace string) error {
+func (id *InstallComponents) CreateNs(namespace string) error {
 	config, err := clientcmd.BuildConfigFromFlags("", id.KubeConfig)
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {

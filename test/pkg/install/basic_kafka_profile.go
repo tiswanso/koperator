@@ -1,7 +1,22 @@
+// Copyright © 2023 Cisco Systems, Inc. and/or its affiliates
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package install
 
 import (
 	"fmt"
+	"github.com/banzaicloud/koperator/test/pkg/kube"
 	"path/filepath"
 	"time"
 )
@@ -17,7 +32,7 @@ var BasicKafkaInstaller BasicKafka = "Basic Kafka Profile"
 var kafkaClusterManifestFile = "simplekafkacluster.yaml"
 
 func (b BasicKafka) Install(config InstallConfig, failOnError bool) ([]PackageInstallStatus, error) {
-	installDepends := NewInstallDependencies(config.ChartDir, config.ManifestDir,
+	installDepends := NewInstallComponents(config.ChartDir, config.ManifestDir,
 		config.KubeConfig, config.extendedClient)
 	if installDepends == nil {
 		return nil, fmt.Errorf("failed to create Install Dependencies object")
@@ -32,14 +47,22 @@ func (b BasicKafka) Install(config InstallConfig, failOnError bool) ([]PackageIn
 	if err := installDepends.CreateNs("kafka"); err != nil {
 		koperatorStatus.Error = fmt.Errorf("failed to create kafka namespace: %v", err)
 	} else if err := installDepends.InstallKafkaOperator("kafka"); err != nil {
-		koperatorStatus.Error = fmt.Errorf("failed to install kafka operator: %v", err)
+		koperatorStatus.Error = fmt.Errorf("failed to install kafka operator: %w", err)
+	}
+
+	// TODO: wait and check for koperator up
+	timeout := 30 * time.Second
+	if pods, err := kube.WaitForActivePodAny(config.KubeClient.Clientset,
+		"kafka", timeout, "app.kubernetes.io/name=kafka-operator"); err != nil {
+		koperatorStatus.Error = fmt.Errorf("kafka operator pods (%d) failed to come up: %w", err, len(pods.Items))
 	}
 	status = append(status, koperatorStatus)
 	if koperatorStatus.Error != nil && failOnError {
 		return status, nil
 	}
-	// TODO: wait and check for koperator up
-	time.Sleep(30 * time.Second)
+	// Seem to still have to wait for the webhook handler to be ready in koperator
+	// Likely koperator needs a readiness probe implementation to make this deterministic
+	time.Sleep(10 * time.Second)
 
 	kafkaClusterStatus := PackageInstallStatus{
 		Name:      "KafkaCluster",
@@ -59,7 +82,7 @@ func (b BasicKafka) Install(config InstallConfig, failOnError bool) ([]PackageIn
 }
 func (b BasicKafka) Uninstall(config InstallConfig, packages []PackageInstallStatus) error {
 	// uninstall everything for now... continue on error
-	installDepends := NewInstallDependencies(config.ChartDir, config.ManifestDir,
+	installDepends := NewInstallComponents(config.ChartDir, config.ManifestDir,
 		config.KubeConfig, config.extendedClient)
 	if installDepends == nil {
 		return fmt.Errorf("failed to create Install Dependencies object")

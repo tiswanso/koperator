@@ -1,9 +1,24 @@
+// Copyright © 2023 Cisco Systems, Inc. and/or its affiliates
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package install
 
 import (
 	"fmt"
+	"github.com/banzaicloud/koperator/test/pkg/kube"
 	"io/ioutil"
-	"istio.io/istio/pkg/kube"
+	istio "istio.io/istio/pkg/kube"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -18,7 +33,8 @@ type InstallConfig struct {
 	ChartDir       string
 	ManifestDir    string
 	KubeConfig     string
-	extendedClient kube.ExtendedClient
+	extendedClient istio.ExtendedClient
+	KubeClient     kube.KubeClient
 }
 
 type Install struct {
@@ -48,23 +64,29 @@ var installProfiles = map[Profile]ProfileInstaller{
 }
 
 func NewInstall(chartDir, manifestDir, kubeConfig string) *Install {
+	kubeClient, _ := kube.NewKubeClient()
 	return &Install{
 		Config: InstallConfig{
 			ChartDir:       chartDir,
 			ManifestDir:    manifestDir,
 			KubeConfig:     kubeConfig,
 			extendedClient: nil,
+			KubeClient:     kubeClient,
 		},
 	}
 }
 
-func (i *Install) GetExtendedClient() (kube.ExtendedClient, error) {
+func (i *Install) GetKubeClient() (kube.KubeClient, error) {
+	return i.Config.KubeClient, nil
+}
+
+func (i *Install) GetExtendedClient() (istio.ExtendedClient, error) {
 	if i.Config.extendedClient == nil {
 		kubeClientConfig, err := getClientCfgFromKubeconfigFile(i.Config.KubeConfig)
 		if err != nil {
 			return nil, err
 		}
-		i.Config.extendedClient, err = kube.NewExtendedClient(kubeClientConfig, "")
+		i.Config.extendedClient, err = istio.NewExtendedClient(kubeClientConfig, "")
 		if err != nil {
 			return nil, err
 		}
