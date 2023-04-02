@@ -46,7 +46,6 @@ jobs:
           tags: ghcr.io/banzaicloud/kafka-operator:${{ steps.imagetag.outputs.value }}
           file: Dockerfile
           platforms: ${{ env.PLATFORMS }}
-          cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
           outputs: type=docker,dest=/tmp/kafka-operator-${{ steps.imagetag.outputs.value }}.tar
         if: github.event_name == 'pull_request' || github.ref_name == 'test-e2e-ci'
