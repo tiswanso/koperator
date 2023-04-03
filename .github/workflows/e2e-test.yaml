@@ -27,6 +27,7 @@ jobs:
         with:
           version: v0.13.0
           image: kindest/node:${{ matrix.image }}
+          config: test/kind_config.yaml
       - name: Check kind cluster
         run: |
           kubectl version
