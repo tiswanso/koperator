@@ -15,7 +15,9 @@ jobs:
       fail-fast: false
       matrix:
         image:
+          - v1.25.2
           - v1.24.6
+          - v1.23.12
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
