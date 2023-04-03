@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - master
-      - test-e2e-ci
+      - "test-e2e-ci**"
     tags:
       - "v?[0-9]+.[0-9]+.[0-9]+"
       - "v?[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
@@ -48,26 +48,26 @@ jobs:
           platforms: ${{ env.PLATFORMS }}
           cache-to: type=local,dest=/tmp/.buildx-cache
           outputs: type=docker,dest=/tmp/kafka-operator-${{ steps.imagetag.outputs.value }}.tar
-        if: github.event_name == 'pull_request' || github.ref_name == 'test-e2e-ci'
+        if: github.event_name == 'pull_request' || startsWith(github.ref_name, 'test-e2e-ci')
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: kafka-operator-${{ steps.imagetag.outputs.value }}
           path: /tmp/kafka-operator-${{ steps.imagetag.outputs.value }}.tar
-        if: github.event_name == 'pull_request' || github.ref_name == 'test-e2e-ci'
+        if: github.event_name == 'pull_request' || startsWith(github.ref_name, 'test-e2e-ci')
       - name: run e2e test
         uses: ./.github/workflows/e2e-test.yaml
         with:
           kafka-operator-image-artifact: /tmp/kafka-operator-${{ steps.imagetag.outputs.value }}.tar
           kafka-operator-image-name: ghcr.io/banzaicloud/kafka-operator:${{ steps.imagetag.outputs.value }}
-        if: github.event_name == 'pull_request' || github.ref_name == 'test-e2e-ci'
+        if: github.event_name == 'pull_request' || startsWith(github.ref_name, 'test-e2e-ci')
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.CR_PAT }}
-        if: github.event_name != 'pull_request' && github.ref_name != 'test-e2e-ci'
+        if: github.event_name != 'pull_request' && !startsWith(github.ref_name, 'test-e2e-ci')
       - name: Build and push kafka-operator
         uses: docker/build-push-action@v3
         with:
@@ -77,4 +77,4 @@ jobs:
           push: true
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
-        if: github.event_name != 'pull_request' && github.ref_name != 'test-e2e-ci'
+        if: github.event_name != 'pull_request' && !startsWith(github.ref_name, 'test-e2e-ci')
