@@ -35,10 +35,10 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v3
         with:
-          name: kafka-operator
-          path: ${{ inputs.kafka-operator-image-artifact }}
+          name: ${{ inputs.kafka-operator-image-artifact }}
+          path: /tmp/${{ inputs.kafka-operator-image-artifact }}.tar
       - name: Load image
         run: |
-          kind load image-archive ${{ inputs.kafka-operator-image-artifact }}
+          kind load image-archive /tmp/${{ inputs.kafka-operator-image-artifact }}.tar
 
 
