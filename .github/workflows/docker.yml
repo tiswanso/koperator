@@ -16,6 +16,9 @@ jobs:
   docker:
     name: Docker
     runs-on: ubuntu-latest
+    outputs:
+      kafka-operator-image-artifact: ${{ steps.output_koperator_artifact.outputs.value }}
+      kafka-operator-image-name: ${{ steps.output_koperator_image_name.outputs.value }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -55,12 +58,10 @@ jobs:
           name: kafka-operator-${{ steps.imagetag.outputs.value }}
           path: /tmp/kafka-operator-${{ steps.imagetag.outputs.value }}.tar
         if: github.event_name == 'pull_request' || startsWith(github.ref_name, 'test-e2e-ci')
-      - name: run e2e test
-        uses: ./.github/workflows/e2e-test.yaml
-        with:
-          kafka-operator-image-artifact: /tmp/kafka-operator-${{ steps.imagetag.outputs.value }}.tar
-          kafka-operator-image-name: ghcr.io/banzaicloud/kafka-operator:${{ steps.imagetag.outputs.value }}
-        if: github.event_name == 'pull_request' || startsWith(github.ref_name, 'test-e2e-ci')
+      - id: output_koperator_artifact
+        run: echo "value=kafka-operator-${{ steps.imagetag.outputs.value }}" >> "$GITHUB_OUTPUT"
+      - id: output_koperator_image_name
+        run: echo "value=ghcr.io/banzaicloud/kafka-operator:${{ steps.imagetag.outputs.value }}" >> "$GITHUB_OUTPUT"
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
@@ -78,3 +79,13 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
         if: github.event_name != 'pull_request' && !startsWith(github.ref_name, 'test-e2e-ci')
+
+  run-e2e:
+    if: github.event_name == 'pull_request' || startsWith(github.ref_name, 'test-e2e-ci')
+    needs: docker
+    uses: ./.github/workflows/e2e-test.yaml
+    with:
+      kafka-operator-image-artifact: ${{needs.docker.outputs.kafka-operator-image-artifact}}
+      kafka-operator-image-name: ${{needs.docker.outputs.kafka-operator-image-name}}
+
+
