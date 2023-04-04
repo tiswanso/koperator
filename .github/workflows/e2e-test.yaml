@@ -38,6 +38,7 @@ jobs:
           kubectl get pods -n kube-system
           echo "current-context:" $(kubectl config current-context)
           echo "environment-kubeconfig:" ${KUBECONFIG}
+          kind get kubeconfig > test/e2e/kind.kconf
       - name: Download artifact
         uses: actions/download-artifact@v3
         with:
@@ -48,7 +49,7 @@ jobs:
           kind load image-archive /tmp/${{ inputs.kafka-operator-image-artifact }}.tar
       - name: run tests
         run: |
-          go test -v
+          go test -v --kubeconfig kind.kconf
         working-directory: test/e2e
 
 
