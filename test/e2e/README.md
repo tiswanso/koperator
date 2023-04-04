@@ -1,5 +1,14 @@
 # koperator E2E Testing
 
+## Prereqs
+
+Due to the CRDs not being able to be applied without disabling k8s client/api validation the following
+must be done prior to running the tests:
+
+```
+kubectl create --validate=false -f https://github.com/banzaicloud/koperator/releases/download/v0.22.0/kafka-operator.crds.yaml
+```
+
 ## Scenarios
 
 The e2e test scenarios are intended for testing within any Kubernetes cluster, unless otherwise indicated.
