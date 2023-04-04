@@ -34,8 +34,8 @@ var (
 	cleanup                 bool
 	kopNoPrereqs            bool
 	kafkaClusterManifestDir = "../../config/samples"
-	kafkaClusterWaitTime    = 6 * time.Minute
-	kafkaBrokerWaitTime     = 3 * time.Minute
+	kafkaClusterWaitTime    = 10 * time.Minute
+	kafkaBrokerWaitTime     = 6 * time.Minute
 )
 
 var kClient kube.KubeClient

@@ -52,12 +52,20 @@ jobs:
           kubectl create --validate=false -f config/base/crds
       - name: run tests
         run: |
-          go test -v --kubeconfig kind.kconf
+          go test -v -timeout 30m --kubeconfig kind.kconf
         working-directory: test/e2e
       - name: Collect Data
+        if: ${{ success() || failure() || cancelled() }}
         run: |
+          echo "------------------pods ---------------------"
           kubectl get pods -A
+          echo "------------------ KafkaClusters ---------------------"
           kubectl get kafkaclusters -A
-
+          echo "------------------svcs ---------------------"
+          kubectl get svc -A
+          echo "------------------configmaps ---------------------"
+          kubectl get configmaps -A
+          echo "------------------secrets ---------------------"
+          kubectl get secrets -A
 
 
