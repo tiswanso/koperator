@@ -34,6 +34,8 @@ var (
 	cleanup                 bool
 	kopNoPrereqs            bool
 	kafkaClusterManifestDir = "../../config/samples"
+	kafkaClusterWaitTime    = 6 * time.Minute
+	kafkaBrokerWaitTime     = 3 * time.Minute
 )
 
 var kClient kube.KubeClient
@@ -167,7 +169,7 @@ func CheckKafkaClusterStatus(t *testing.T) {
 	var kcluster *koperatorv1beta1.KafkaCluster
 	var err error
 
-	reconcileWaitTimeout := 3 * time.Minute
+	reconcileWaitTimeout := kafkaClusterWaitTime
 	for startTime := time.Now(); time.Since(startTime) < reconcileWaitTimeout; {
 		if kcluster, err = GetKafkaCluster("kafka", "kafka"); err != nil {
 			t.Logf("failed to get cluster: %v", err)
@@ -223,7 +225,7 @@ func CheckBrokers(t *testing.T, kcluster *koperatorv1beta1.KafkaCluster) error {
 	}
 	for _, broker := range kcluster.Spec.Brokers {
 		labels := []string{"app=kafka", "brokerId=" + fmt.Sprintf("%d", broker.Id)}
-		pods, err := kube.WaitForActivePodAll(kClient.Clientset, kcluster.Namespace, 120*time.Second, labels...)
+		pods, err := kube.WaitForActivePodAll(kClient.Clientset, kcluster.Namespace, kafkaBrokerWaitTime, labels...)
 		if err != nil {
 			t.Errorf("Timed out waiting broker pod %d to become active: %v", broker.Id, err)
 		}
