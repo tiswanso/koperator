@@ -43,5 +43,9 @@ jobs:
       - name: Load image
         run: |
           kind load image-archive /tmp/${{ inputs.kafka-operator-image-artifact }}.tar
+      - name: run tests
+        run: |
+          go test -v
+        working-directory: test/e2e
 
 
