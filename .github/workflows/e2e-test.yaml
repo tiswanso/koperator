@@ -60,12 +60,22 @@ jobs:
           echo "------------------pods ---------------------"
           kubectl get pods -A
           echo "------------------ KafkaClusters ---------------------"
-          kubectl get kafkaclusters -A
+          kubectl get kafkaclusters -A -o yaml
           echo "------------------svcs ---------------------"
           kubectl get svc -A
           echo "------------------configmaps ---------------------"
           kubectl get configmaps -A
           echo "------------------secrets ---------------------"
           kubectl get secrets -A
-
+      - name: Test uninstall
+        run: |
+          go test -v -run=TestInstall/"Uninstall Kafka" --kubeconfig kind.kconf --cleanup
+        working-directory: test/e2e
+      - name: Collect Data
+        if: ${{ success() || failure() || cancelled() }}
+        run: |
+          echo "------------------pods ---------------------"
+          kubectl get pods -A
+          echo "------------------ KafkaClusters ---------------------"
+          kubectl get kafkaclusters -A -o yaml
 
