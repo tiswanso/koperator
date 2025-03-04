@@ -1,3 +1,9 @@
+<p style="font-size:150%;color : red">
+<b>This repository is no longer maintained.  Please consider Adobe's fork at</b> <a href="https://github.com/adobe/koperator/">https://github.com/adobe/koperator/ </a>
+</p>
+
+---
+
 <p align="center">
 
 ![Koperator](https://img.shields.io/github/v/release/banzaicloud/koperator?label=Koperator&sort=semver)
