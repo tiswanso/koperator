@@ -1,6 +1,5 @@
-<p style="font-size:150%;color : red">
-<b>This repository is no longer maintained.  Please consider Adobe's fork at</b> <a href="https://github.com/adobe/koperator/">https://github.com/adobe/koperator/ </a>
-</p>
+> [!CAUTION]
+> **This repository is no longer maintained.**  Please consider Adobe's fork at [https://github.com/adobe/koperator/](https://github.com/adobe/koperator/)
 
 ---
 
@@ -25,6 +24,8 @@
 ![Helm chart](https://img.shields.io/github/actions/workflow/status/banzaicloud/koperator/helm.yml?branch=master&label=Helm%20chart)
 
 </p>
+
+
 
 # Koperator
 
